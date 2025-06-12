@@ -32,13 +32,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🚀 Открыть WebApp", web_app=WebAppInfo(url="https://konstantinius-cmd.github.io/rostelecom-webapp/"))],
         [InlineKeyboardButton("🔁 Перезапустить", callback_data="restart")]
     ]
-    markup = InlineKeyboardMarkup(keyboard)
-    if update.message:
-        await update.message.reply_text("Здравствуйте! Чем я могу помочь?", reply_markup=markup)
-    elif update.callback_query:
-        await update.callback_query.message.reply_text("Здравствуйте! Чем я могу помочь?", reply_markup=markup)
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-# Обработка кнопок
+    if update.message:
+        await update.message.reply_text("Здравствуйте! Чем я могу помочь?", reply_markup=reply_markup)
+    elif update.callback_query:
+        await update.callback_query.message.reply_text("Здравствуйте! Чем я могу помочь?", reply_markup=reply_markup)
+
+# Обработка inline-кнопок (если будут)
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -107,22 +108,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Спасибо! Заявка отправлена специалисту.")
         user_states.pop(chat_id, None)
 
-# WebApp обработка
+# Обработка WebApp данных
 async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥 ПОЛУЧЕНЫ ДАННЫЕ ИЗ WEBAPP!")
+    data = update.effective_message.web_app_data.data
+    print(f"Данные от WebApp: {data}")  # Выводим данные для отладки
+
     try:
-        data = json.loads(update.effective_message.web_app_data.data)
-        action = data.get("action")
+        parsed = json.loads(data)
+        action = parsed.get("action")
 
         if action == "connect_service":
             chat_id = update.message.chat_id
             user_states[chat_id] = {"step": 1, "data": {}}
-            await update.message.reply_text("Вы выбрали подключение услуги. Введите ваше ФИО:", reply_markup=cancel_markup())
+            await update.message.reply_text(
+                "Вы выбрали подключение услуги. Введите ваше ФИО:",
+                reply_markup=cancel_markup()
+            )
 
         elif action == "info":
-            await update.message.reply_text(f"ℹ️ {data.get('message')}")
+            await update.message.reply_text(f"ℹ️ {parsed.get('message')}")
         else:
             await update.message.reply_text("❗ Неизвестный тип действия из WebApp.")
-    except Exception:
+    except Exception as e:
+        print(f"Ошибка при обработке данных: {e}")
         await update.message.reply_text("❌ Ошибка при обработке данных из WebApp.")
 
 # Кнопки управления
@@ -137,6 +146,11 @@ def back_cancel_markup():
         ]
     ])
 
+# Для отладки всех сообщений (временно)
+async def debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🪵 [debug] update:")
+    print(update)
+
 # Запуск
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -146,6 +160,9 @@ if __name__ == "__main__":
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp_data))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # временный отладочный хендлер
+    app.add_handler(MessageHandler(filters.ALL, debug_all))
 
     print("Бот запущен...")
     app.run_polling()
