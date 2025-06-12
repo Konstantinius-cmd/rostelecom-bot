@@ -1,3 +1,4 @@
+import re  # Добавляем импорт для регулярных выражений
 from dotenv import load_dotenv
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -45,25 +46,50 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "new_service":
         user_states[chat_id] = {"step": 1, "data": {}}
-        await query.message.reply_text(
-            "Введите ваше ФИО:",
-            reply_markup=cancel_markup()
-        )
+        # Добавляем выбор услуги
+        keyboard = [
+            [InlineKeyboardButton("🌐 Интернет", callback_data="service_internet")],
+            [InlineKeyboardButton("📺 Интернет с телевидением", callback_data="service_internet_tv")],
+            [InlineKeyboardButton("🌐📺 Интернет, телевидение и сим-карта", callback_data="service_internet_tv_sim")],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.message.reply_text("Что вы хотите подключить?", reply_markup=reply_markup)
+
+    elif query.data == "service_internet":
+        user_states[chat_id]["data"]["Услуга"] = "Интернет"
+        await query.message.reply_text("Вы выбрали подключение Интернета. Введите ваше ФИО:")
+        user_states[chat_id]["step"] = 2
+        await query.message.reply_text("Введите ваше ФИО:")
+
+    elif query.data == "service_internet_tv":
+        user_states[chat_id]["data"]["Услуга"] = "Интернет с телевидением"
+        await query.message.reply_text("Вы выбрали подключение Интернета с телевидением. Введите ваше ФИО:")
+        user_states[chat_id]["step"] = 2
+        await query.message.reply_text("Введите ваше ФИО:")
+
+    elif query.data == "service_internet_tv_sim":
+        user_states[chat_id]["data"]["Услуга"] = "Интернет, телевидение и сим-карта"
+        await query.message.reply_text("Вы выбрали подключение Интернета, телевидения и сим-карты. Введите ваше ФИО:")
+        user_states[chat_id]["step"] = 2
+        await query.message.reply_text("Введите ваше ФИО:")
+
+    # Если другие кнопки, например для смены тарифа или технических неполадок
     elif query.data == "change_tariff":
         await query.message.reply_text(
             "Если вы уже пользуетесь услугами компании Ростелеком и хотите сменить тариф — обратитесь по номеру горячей линии: 8 800 100 08 00",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="restart")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="restart")]]),
         )
     elif query.data == "issues":
         await query.message.reply_text(
             "Для решения технических проблем посетите https://komi.rt.ru/care или позвоните: 8 800 100 08 00",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="restart")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="restart")]]),
         )
     elif query.data == "restart":
         await start(update, context)
     elif query.data == "cancel":
         user_states.pop(chat_id, None)
-        await query.message.reply_text("🔁 Ввод данных сброшен. Вы можете начать заново, если допустили ошибку. Нажмите /start.")
+        await query.message.reply_text(
+            "🔁 Ввод данных сброшен. Вы можете начать заново, если допустили ошибку. Нажмите /start.")
     elif query.data == "back":
         if chat_id not in user_states:
             return
@@ -76,7 +102,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("Введите ваше ФИО:", reply_markup=cancel_markup())
         elif step == 3:
             state["step"] = 2
-            await query.message.reply_text("Введите адрес (город, улица, дом, квартира):", reply_markup=back_cancel_markup())
+            await query.message.reply_text("Введите адрес (город, улица, дом, квартира):",
+                                           reply_markup=back_cancel_markup())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
@@ -84,7 +111,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text.lower() == "/cancel":
         user_states.pop(chat_id, None)
-        await update.message.reply_text("🔁 Ввод данных сброшен. Вы можете начать заново, если допустили ошибку. Нажмите /start.")
+        await update.message.reply_text(
+            "🔁 Ввод данных сброшен. Вы можете начать заново, если допустили ошибку. Нажмите /start.")
         return
 
     if chat_id not in user_states:
@@ -92,49 +120,57 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     state = user_states[chat_id]
 
-    if state["step"] == 1:
+    if state["step"] == 2:
         if not is_valid_fio(text):
-            await update.message.reply_text("❗ Пожалуйста, введите корректное ФИО (минимум имя и фамилия, только буквы).")
+            await update.message.reply_text(
+                "❗ Пожалуйста, введите корректное ФИО (минимум имя и фамилия, только буквы).")
             return
 
         state["data"]["ФИО"] = text
-        state["step"] = 2
+        state["step"] = 3
         await update.message.reply_text(
             "Введите адрес (город, улица, дом, квартира):",
             reply_markup=back_cancel_markup()
         )
-    elif state["step"] == 2:
+    elif state["step"] == 3:
         if not is_valid_address(text):
-            await update.message.reply_text("❗ Пожалуйста, введите корректный адрес (например: г. Сыктывкар, ул. Ленина, д. 1, кв. 2).")
+            await update.message.reply_text(
+                "❗ Пожалуйста, введите корректный адрес (например: г. Сыктывкар, ул. Ленина, д. 1, кв. 2).")
             return
 
         state["data"]["Адрес"] = text
-        state["step"] = 3
+        state["step"] = 4
         await update.message.reply_text(
             "Введите номер телефона:",
             reply_markup=back_cancel_markup()
         )
-    elif state["step"] == 3:
+    elif state["step"] == 4:
         if not is_valid_phone(text):
-            await update.message.reply_text("❗ Пожалуйста, введите корректный номер телефона (начиная с 7 или 8, 11 цифр).")
+            await update.message.reply_text(
+                "❗ Пожалуйста, введите корректный номер телефона (начиная с 7 или 8, 11 цифр).")
             return
 
         state["data"]["Телефон"] = text
 
+        # Информация по заявке
         info = state["data"]
         message = (
             "📥 Новая заявка на подключение:\n\n"
             f"👤 ФИО: {info['ФИО']}\n"
             f"🏠 Адрес: {info['Адрес']}\n"
-            f"📞 Телефон: {info['Телефон']}"
+            f"📞 Телефон: {info['Телефон']}\n"
+            f"🛠 Услуга: {info['Услуга']}"
         )
         await context.bot.send_message(chat_id=ADMIN_ID, text=message)
-        await update.message.reply_text("✅ Спасибо! Заявка отправлена специалисту. В скором времни с вами свяжется наш менеджер")
+        await update.message.reply_text(
+            "✅ Спасибо! Заявка отправлена специалисту. В скором времни с вами свяжется наш менеджер!")
         user_states.pop(chat_id, None)
+
 
 # Кнопка "Изменить данные"
 def cancel_markup():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔁 Изменить данные", callback_data="cancel")]])
+
 
 # Кнопки "Назад" и "Изменить данные"
 def back_cancel_markup():
@@ -144,6 +180,7 @@ def back_cancel_markup():
             InlineKeyboardButton("🔁 Изменить данные", callback_data="cancel")
         ]
     ])
+
 
 # Запуск
 if __name__ == "__main__":
